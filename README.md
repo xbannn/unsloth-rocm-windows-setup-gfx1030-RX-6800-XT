@@ -626,6 +626,17 @@ optim_value = "adamw_torch" if torch.version.hip else training_args.get("optim",
 
 **Why:** `max_seq_length` was removed from `SFTConfig.__init__()` in TRL 0.22+. Passing it crashes with `TypeError: got an unexpected keyword argument 'max_seq_length'`.
 
+**10H — Fix mixed BFloat16/Float16 dtypes for Qwen3.5 on ROCm** (around line 1098):
+```python
+# AFTER get_peft_model(), add:
+if getattr(torch.version, "hip", None):
+    for param in self.model.parameters():
+        if param.dtype == torch.bfloat16:
+            param.data = param.data.to(torch.float16)
+```
+
+**Why:** Qwen3.5's `linear_attn` layers (GatedDeltaNet/Mamba2) have weights in `bfloat16` via `mamba_ssm_dtype` in the model config. On ROCm, all other weights are `float16`. During backward pass, the matmul gets `BFloat16 weight × Float16 gradient` which crashes with `expected mat1 and mat2 to have the same dtype, but got: c10::BFloat16 != c10::Half`. Converting all BFloat16 params to Float16 after LoRA attachment fixes it.
+
 ---
 
 ### PATCH 11: `studio/backend/core/inference/inference.py` — ROCm inference dtype
