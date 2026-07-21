@@ -614,7 +614,27 @@ optim_value = "adamw_torch" if torch.version.hip else training_args.get("optim",
 
 **Why:** TRL 0.24.0 renamed the `tokenizer` parameter to `processing_class` in `SFTTrainer.__init__()` and `UnslothTrainer.__init__()`. Passing `tokenizer` to these classes crashes with `TypeError: got an unexpected keyword argument 'tokenizer'`.
 
-**10G — Strip max_seq_length from SFTConfig** (around line 3391, 3451):
+**10G — Fix Qwen3.5 BFloat16 dtype on ROCm** (add to imports, after line ~30):
+```python
+# Monkey-patch Qwen3_5Config to force float16 for linear_attn on ROCm
+import torch
+if getattr(torch.version, "hip", None):
+    try:
+        from transformers.models.qwen3_5.configuration_qwen3_5 import Qwen3_5Config
+        orig_init = Qwen3_5Config.__init__
+        def _patched_init(self, **kwargs):
+            orig_init(self, **kwargs)
+            if hasattr(self, "text_config") and hasattr(self.text_config, "mamba_ssm_dtype"):
+                self.text_config.mamba_ssm_dtype = "float16"
+                self.text_config.dtype = "float16"
+        Qwen3_5Config.__init__ = _patched_init
+    except Exception:
+        pass
+```
+
+**Why:** Qwen3.5's `linear_attn` layers (GatedDeltaNet/Mamba2) store weights as `bfloat16` in the checkpoint. The `mamba_ssm_dtype` config field tells the loader what dtype to cast to, but changing the config file isn't reliable because the training subprocess uses a separate transformers venv. Monkey-patching `Qwen3_5Config.__init__` guarantees the dtype is always `float16` on ROCm, before any model loading happens.
+
+**10H — Strip max_seq_length from SFTConfig** (around line 3391, 3451):
 ```python
 # BEFORE:
 "args": SFTConfig(**config_args),
@@ -1124,6 +1144,43 @@ Index: https://rocm.nightlies.amd.com/v2-staging/gfx103X-dgpu/
 **Cause:** Unsloth's auto-dtype detection picks float32 for Qwen3.5 even when `dtype=torch.float16` is requested. This doubles VRAM requirements (9 GB for the 4B model).
 **Fix:** Accept float32. The model still fits in 16GB VRAM (9.08 GB allocated). Training with LoRA reduces memory further.
 
+### Error: "expected mat1 and mat2 to have the same dtype, but got: c10::BFloat16 != c10::Half"
+**Cause:** Gradient checkpointing buffers are initialized as `bfloat16` during model loading, but model weights are `float16`. During backward replay, the BFloat16 buffer produces BFloat16 hidden_states that crash against float16 linear weights. (Root cause: `initialize_unsloth_gradient_checkpointing(dtype)` is called with the Unsloth-forced dtype before our ROCm dtype fix runs.) Also, `Qwen3_5RMSNormGated.forward_native()` doesn't preserve input dtype — `mean()` on float16 promotes to float32, which propagates through subsequent operations (vLLM PR #35256 fix).
+**Fix (3-part):**
+1. **GC buffers:** After model loading, call `initialize_unsloth_gradient_checkpointing(torch.float16)` in `trainer.py` (severe model loading section).
+2. **Compiled module forward:** Patch `Qwen3_5GatedDeltaNet_forward` in the compiled module to cast `hidden_states` dtype to match `self.in_proj_qkv.weight.dtype` before the forward call. Applied via `sitecustomize.py` import hook.
+3. **RMSNormGated output:** Force `Qwen3_5RMSNormGated_forward` output to `torch.float16` regardless of input dtype (vLLM fix). Applied via `sitecustomize.py` import hook.
+**Files modified:** `trainer.py` (after model loading), `sitecustomize.py` (import hook for compiled module)
+
+### Error: "Logits are empty from 2024.11 onwards" / `NotImplementedError` during training
+**Cause:** The compiled module (`unsloth_compiled_module_qwen3_5.py`) checks `os.environ.get('UNSLOTH_RETURN_LOGITS', '0') == '1'` at line 1160 of the generated forward function. Even though the env var is set at `trainer.py:18` (before any unsloth imports), the compiled module's code generation captures the env var state at **generation time** in a previous run. On subsequent training steps, the env var check can return `EmptyLogits` sporadically.
+**Fix:** Patch the compiled module's `Qwen3_5ForConditionalGeneration_forward` in-memory after model loading to set `os.environ["UNSLOTH_RETURN_LOGITS"] = "1"` before every forward call. Applied in `trainer.py` after `FastLanguageModel.from_pretrained()`.
+**Files modified:** `trainer.py` (post-load in-memory patch for compiled module)
+
+### HIP out of memory (OOM) during training
+**Cause:** Qwen3.5-4B in float32 uses ~14 GB VRAM (90% of 16 GB). During training, optimizer states, gradients, and activations push memory over the limit.
+**Fix:** Reduce batch size to 1, gradient accumulation to 8, context length to 1024. This keeps peak usage under 14 GB.
+**Note:** Using `adamw_torch` (not `adamw_8bit`) avoids bitsandbytes dependency.
+
+### Training results on SWE-bench_Pro (Qwen3.5 Agents-A1-4B + LoRA)
+| Metric | Before Training | After Training (50 samples, 30 steps) |
+|--------|----------------|--------------------------------------|
+| Git diff in output | 0/10 (0%) | 3/3 (100%) |
+| Output style | Analysis text only | `<think>` reasoning + `diff --git` patches |
+| Avg generation time | ~107s | ~127s (LoRA adds slight overhead) |
+| Loss | N/A | 12.29 → 11.38 (downward trend) |
+
+**Dataset format for training:** Convert SWE-bench_Pro to ChatML with `<think>` reasoning:
+```json
+{
+  "messages": [
+    {"role": "user", "content": "Fix this bug:\n\n{problem_statement}"},
+    {"role": "assistant", "content": "<think>\n{auto-generated reasoning}\n</think>\n\n{patch}"}
+  ]
+}
+```
+See `scripts/create_swebench_dataset.py` for the full converter (requires `datasets` library).
+
 ---
 
-*End of guide. Generated 2026-07-21. Tested on AMD Radeon RX 6800 XT (gfx1030), 16GB VRAM, Windows 11. Qwen3.5 support added.*
+*End of guide. Generated 2026-07-21. Tested on AMD Radeon RX 6800 XT (gfx1030), 16GB VRAM, Windows 11. Qwen3.5 training support added (vLLM PR #35256 fix adapted for Unsloth).*
