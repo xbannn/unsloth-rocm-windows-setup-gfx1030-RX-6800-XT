@@ -1153,6 +1153,29 @@ Index: https://rocm.nightlies.amd.com/v2-staging/gfx103X-dgpu/
 **Files modified:** `trainer.py` (after model loading), `sitecustomize.py` (import hook for compiled module)
 **Cache management:** After any dtype fix, delete `unsloth_compiled_cache/unsloth_compiled_module_qwen3_5.py` AND its `__pycache__/*.pyc` to force recompilation with correct dtypes. The `.pyc` file persists the old dtype-conditional code even after the `.py` source is patched.
 
+### Full list of Qwen3.5 errors encountered and fixed on ROCm Windows
+
+| # | Error | Root Cause | Fix |
+|---|-------|-----------|-----|
+| 1 | `Unrecognized model in ... Should have a model_type key` | HF Hub cache symlinks broken on Windows, files show 0 bytes | Restore files from `blobs/` directory to snapshot |
+| 2 | `transformers version does not support Qwen3.5` | Studio ships transformers 4.57.6, Qwen3_5 needs ≥5.2.0 | `pip install "transformers>=5.2.0"` |
+| 3 | `cannot import name 'DeviceMesh' from 'torch.distributed'` | torch.compile inductor tries importing distributed modules not in ROCm Windows build | `UNSLOTH_DISABLE_COMPILE=1` + `TORCH_COMPILE_DISABLE=1` |
+| 4 | `Qwen3VLProcessor has no attribute 'encode'` | Tokenizer from FastLanguageModel is a multimodal processor, not raw text tokenizer | Use `tokenizer.tokenizer.encode(text)` instead of `tokenizer(text, ...)` |
+| 5 | `ValueError: Incorrect image source. Got <|im_start|>system` | VLM processor tries to parse images from text even with images=None | Use `tokenizer.tokenizer.encode(text, text_only=True)` or avoid processor's call |
+| 6 | `Keyword argument 'text_only' is not a valid argument` | text_only parameter not supported by Qwen3VLProcessor | Use `tokenizer.tokenizer.encode()` directly |
+| 7 | `'str' object has no attribute 'to'` | apply_chat_template returns string when tokenization fails | Use two-step: `apply_chat_template(tokenize=False)` + `tokenizer.encode()` |
+| 8 | `MIOpen: CK grouped conv library not found` | Vision encoder conv layers need MIOpen kernels not available for gfx1030 | Warning only, not blocking. Suppress with `MIOPEN_ENABLE_LOGGING_CMD=0` |
+| 9 | `float16 precision won't work! Using float32` | Unsloth forces float32 for qwen3_5 architecture | Accept float32. Model uses ~9 GB in float32 (still fits 16 GB) |
+| 10 | `Qwen3_5Config' object has no attribute 'lower'` | Can't pass config object as model_name to from_pretrained | Use string path only; modify config.json on disk instead |
+| 11 | **Core error:** `expected mat1 and mat2 to have same dtype, c10::BFloat16 != c10::Half` | GC buffers init as bfloat16, model weights are float16. During backward replay, BFloat16 hidden_states hit float16 weights | (a) Reinit GC buffers to float16 after model load (b) Patch compiled module to cast hidden_states dtype (c) Force RMSNormGated output to float16 (vLLM PR #35256) |
+| 12 | `OutOfMemoryError: HIP out of memory` converting float16→float32 | Conversion creates new tensors, doubling VRAM requirement | Convert right after model loading (before LoRA/optimizer), not after |
+| 13 | `OutOfMemoryError` during training Step 4+ | Model + LoRA + optimizer + activations exceed 16 GB at batch=2, grad_accum=4, ctx=2048 | Reduce batch=1, grad_accum=8, ctx_len=1024 |
+| 14 | `NotImplementedError: Logits are empty` at training Step 4 (after eval) | Compiled module checks env var `UNSLOTH_RETURN_LOGITS` at runtime; sporadically returns EmptyLogits after eval cycle | Patch compiled module forward in-memory to set env var before every call |
+| 15 | Training loss 12→9→12 (spiking) | Model adjusting to different samples, random initialization | Normal behavior for first epoch with complex output format (git diffs) |
+| 16 | Training stuck at step 2 with red "Error" banner | Stale error from previous run cached in Studio UI | Ignore; training was actually progressing |
+
+**Cache Gotcha:** The compiled module (`unsloth_compiled_cache/unsloth_compiled_module_qwen3_5.py`) and its `.pyc` bytecode cache persist between runs. After ANY code or env var change affecting the compiled forward, BOTH must be deleted to force recompilation. The `.pyc` can retain old dtype-conditional code even after the `.py` source is patched.
+
 ### Error: "Logits are empty from 2024.11 onwards" / `NotImplementedError` during training
 **Cause:** The compiled module (`unsloth_compiled_module_qwen3_5.py`) checks `os.environ.get('UNSLOTH_RETURN_LOGITS', '0') == '1'` at line 1160 of the generated forward function. Even though the env var is set at `trainer.py:18` (before any unsloth imports), the compiled module's code generation captures the env var state at **generation time** in a previous run. On subsequent training steps, the env var check can return `EmptyLogits` sporadically.
 **Fix:** Patch the compiled module's `Qwen3_5ForConditionalGeneration_forward` in-memory after model loading to set `os.environ["UNSLOTH_RETURN_LOGITS"] = "1"` before every forward call. Applied in `trainer.py` after `FastLanguageModel.from_pretrained()`.
