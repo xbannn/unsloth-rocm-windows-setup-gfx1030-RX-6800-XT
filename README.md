@@ -16,7 +16,6 @@
 > **Repo structure:**  
 > - [`README.md`](README.md) — Full walkthrough (this file)  
 > - [`patches/`](patches/) — All 14 patches as `.diff` files (usable with `git apply`)  
-> - [`scripts/`](scripts/) — Training dataset builder, SWE-bench evaluator, benchmark runner  
 > - [`LICENSE`](LICENSE) — MIT
 
 ## Table of Contents
