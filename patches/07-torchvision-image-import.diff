@@ -1,0 +1,10 @@
+--- a/torchvision/io/image.py
++++ b/torchvision/io/image.py
+@@ -1,4 +1,4 @@
+-try:
+-    from torchvision.extension import _load_library
+-except (ImportError, OSError):
+-    _load_library = lambda name: False
++from ..extension import _load_library
++
++

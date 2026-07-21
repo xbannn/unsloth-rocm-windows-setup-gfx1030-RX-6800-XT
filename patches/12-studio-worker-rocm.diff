@@ -1,0 +1,9 @@
+--- a/studio/backend/core/inference/worker.py
++++ b/studio/backend/core/inference/worker.py
+@@ -292,0 +293,6 @@
++    import torch
++    if getattr(torch.version, "hip", None):
++        os.environ["UNSLOTH_RETURN_LOGITS"] = "1"
++        os.environ["UNSLOTH_DISABLE_COMPILE"] = "1"
++        os.environ["TORCH_COMPILE_DISABLE"] = "1"
++        load_in_4bit = False

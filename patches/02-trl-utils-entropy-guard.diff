@@ -1,0 +1,11 @@
+--- a/trl/trainer/utils.py
++++ b/trl/trainer/utils.py
+@@ -1539,6 +1539,9 @@
+     original_shape = logits.shape[:-1]  # all dims except num_classes
+     num_classes = logits.shape[-1]
+ 
++    if num_classes == 0 or logits.numel() == 0:
++        return torch.zeros(original_shape, device=logits.device, dtype=logits.dtype)
++
+     # Flatten all leading dimensions into one
+     flat_logits = logits.reshape(-1, num_classes)

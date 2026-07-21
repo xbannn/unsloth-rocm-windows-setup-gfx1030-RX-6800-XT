@@ -1,0 +1,18 @@
+--- a/bitsandbytes/cextension.py
++++ b/bitsandbytes/cextension.py
+@@ -200,7 +200,14 @@
+     def __getattr__(self, name):
+-        raise RuntimeError(
+-            f"The current BitsAndBytes library version '{version}' does not support the "
+-            f"following backend '{self.requested_version}' ... "
+-        )
++        import torch
++        def dummy(*args, **kwargs):
++            return torch.empty(0)
++        return dummy
++
++    def __getitem__(self, item):
++        return self.__getattr__(item)
+@@ -319,7 +326,7 @@
+-    if BNB_BACKEND in ("CPU", "XPU"):
++    if BNB_BACKEND in ("CPU", "XPU", "ROCm"):

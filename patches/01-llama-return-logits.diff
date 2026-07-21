@@ -1,0 +1,15 @@
+--- a/unsloth/models/llama.py
++++ b/unsloth/models/llama.py
+@@ -1461,7 +1461,7 @@
+         else:
+-            RETURN_LOGITS = os.environ.get("UNSLOTH_RETURN_LOGITS", "0") == "1"
++            RETURN_LOGITS = True
+             # < 1024 Normal Unsloth uses less VRAM!
+             if bsz * q_len <= 1024 and not RETURN_LOGITS:
+@@ -2214,7 +2214,7 @@
+     if _has_new:
+-        kwargs["logits_to_keep"] = _provided if _provided is not None else 1
++        kwargs["logits_to_keep"] = _provided if _provided is not None else 0
+     elif _has_old:
+-        kwargs["num_logits_to_keep"] = _provided if _provided is not None else 1
++        kwargs["num_logits_to_keep"] = _provided if _provided is not None else 0

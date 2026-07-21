@@ -1,0 +1,15 @@
+--- a/transformers/quantizers/auto.py
++++ b/transformers/quantizers/auto.py
+@@ -59,7 +59,7 @@
+ # ImportError is thrown when the quantizer is not available
+ from ...utils.import_utils import is_torchao_available
+-from .quantizer_torchao import TorchAoHfQuantizer
++# from .quantizer_torchao import TorchAoHfQuantizer
+ from .quantizer_bnb_4bit import Bnb4BitHfQuantizer
+@@ -77,7 +77,7 @@
+     "awq": AwqHfQuantizer,
+     "aqlm": AqlmHfQuantizer,
+     "compressed_tensors": CompressedTensorsHfQuantizer,
+-    "torchao": TorchAoHfQuantizer,
++    # "torchao": TorchAoHfQuantizer,
+     "fbgemm_fp8": FbgemmFp8HfQuantizer,

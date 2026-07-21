@@ -1,0 +1,13 @@
+--- a/torchvision/_meta_registrations.py
++++ b/torchvision/_meta_registrations.py
+@@ -1,10 +1 @@
+-import torch
+-
+-
+-@torch.library.register_fake("torchvision::nms")
+-def _fake_nms(bboxes, scores, iou_threshold):
+-    ...
+-
+-
+-# additional meta registrations for torchvision ops
++# stub - torchvision ops unavailable on this build

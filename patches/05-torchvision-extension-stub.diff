@@ -1,0 +1,40 @@
+--- a/torchvision/extension.py
++++ b/torchvision/extension.py
+@@ -1,30 +1,14 @@
+ import os
+ import torch
+ 
+-
+-_HAS_OPS = True
++_HAS_OPS = False
+ 
+ 
+ def _load_library(lib_name):
+-    try:
+-        torch.ops.load_library(lib_name)
+-        return True
+-    except (OSError, RuntimeError):
+-        return False
++    return False
+ 
+ 
+ def _has_ops():
+-    return _HAS_OPS
++    return False
+ 
+ 
+ def _assert_has_ops():
+-    if not _HAS_OPS:
+-        raise RuntimeError(
+-            "torchvision C++ extension is not available on this system."
+-        )
++    pass
+ 
+ 
+ def _check_cuda_version():
+-    try:
+-        _check_cuda_version = torch._C._cuda_version()
+-        return _check_cuda_version
+-    except Exception:
+-        return -1
++    return -1

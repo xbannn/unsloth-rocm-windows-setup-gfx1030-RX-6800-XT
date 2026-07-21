@@ -1,0 +1,35 @@
+--- a/studio/backend/core/training/trainer.py
++++ b/studio/backend/core/training/trainer.py
+@@ -17,0 +18,4 @@
++os.environ["UNSLOTH_RETURN_LOGITS"] = "1"
++os.environ["UNSLOTH_MOE_BACKEND"] = "native_torch"
++os.environ["UNSLOTH_ALLOW_CPU"] = "1"
++os.environ["UNSLOTH_SKIP_TORCHVISION_CHECK"] = "1"
+@@ -26,7 +31,7 @@
+-_compile_cache = os.environ.get("UNSLOTH_COMPILE_LOCATION", "unsloth_compiled_cache")
++_compile_cache = os.environ.get("UNSLOTH_COMPILE_LOCATION", os.path.join(os.path.expanduser("~/.unsloth/studio"), "unsloth_compiled_cache"))
+@@ -331,7 +336,7 @@
+-optim_value = training_args.get("optim", "adamw_8bit")
++optim_value = "adamw_torch" if torch.version.hip else training_args.get("optim", "adamw_8bit")
+@@ -338,7 +343,7 @@
+-"fp16": not is_bfloat16_supported(),
+-"bf16": is_bfloat16_supported(),
++"fp16": False if torch.version.hip else not is_bfloat16_supported(),
++"bf16": False if torch.version.hip else is_bfloat16_supported(),
+@@ -633,7 +638,7 @@
+-_auto_dtype = torch.float16 if (_is_rocm and not is_bfloat16_supported()) else None
++_auto_dtype = torch.float16 if _is_rocm else None
+@@ -3209,7 +3214,7 @@
+-"fp16": not is_bfloat16_supported(),
+-"bf16": is_bfloat16_supported(),
++"fp16": False if torch.version.hip else not is_bfloat16_supported(),
++"bf16": False if torch.version.hip else is_bfloat16_supported(),
+@@ -3292,7 +3297,7 @@
+-optim_value = training_args.get("optim", "adamw_8bit")
++optim_value = "adamw_torch" if torch.version.hip else training_args.get("optim", "adamw_8bit")
+@@ -3388,7 +3393,7 @@
+-"args": SFTConfig(**config_args),
++"args": SFTConfig(**{k:v for k,v in config_args.items() if k != "max_seq_length"}),
+@@ -3434,7 +3439,7 @@
+-"tokenizer": sft_tokenizer,
++"processing_class": sft_tokenizer,

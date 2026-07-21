@@ -13,6 +13,12 @@
 
 ---
 
+> **Repo structure:**  
+> - [`README.md`](README.md) — Full walkthrough (this file)  
+> - [`patches/`](patches/) — All 14 patches as `.diff` files (usable with `git apply`)  
+> - [`scripts/`](scripts/) — Training dataset builder, SWE-bench evaluator, benchmark runner  
+> - [`LICENSE`](LICENSE) — MIT
+
 ## Table of Contents
 
 - [1. Prerequisites](#1-prerequisites)
@@ -239,6 +245,11 @@ GPU compute OK: -25790.3125
 ---
 
 ## 5. Apply All 14 Patches
+
+Each patch is also available as a standalone `.diff` file in [`patches/`](patches/) — download and apply with:
+```powershell
+git apply patches/01-llama-return-logits.diff
+```
 
 ### 5.0 IMPORTANT: Clear cache before/after patching
 ```powershell

@@ -1,0 +1,13 @@
+--- a/studio/backend/core/export/export.py
++++ b/studio/backend/core/export/export.py
+@@ -395,7 +395,9 @@
+             else:
+                 logger.info("Loading as text model...")
++                import torch
++                _use_4bit = False if getattr(torch.version, "hip", None) else load_in_4bit
+                 model, tokenizer = FastLanguageModel.from_pretrained(
+                     model_name = checkpoint_path,
+                     max_seq_length = max_seq_length,
+                     dtype = None,
+-                    load_in_4bit = load_in_4bit,
++                    load_in_4bit = _use_4bit,

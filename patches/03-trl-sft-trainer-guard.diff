@@ -1,0 +1,11 @@
+--- a/trl/trainer/sft_trainer.py
++++ b/trl/trainer/sft_trainer.py
+@@ -1100,7 +1100,7 @@
+-        if not self.args.use_liger_kernel:  # liger doesn't return logits
++        if not self.args.use_liger_kernel and outputs.logits is not None and outputs.logits.numel() > 0 and outputs.logits.shape[-1] > 0:  # liger doesn't return logits
+             with torch.no_grad():
+                 per_token_entropy = entropy_from_logits(outputs.logits)
+@@ -1134,7 +1134,7 @@
+-        if not self.args.use_liger_kernel:
++        if not self.args.use_liger_kernel and outputs.logits is not None and outputs.logits.numel() > 0 and outputs.logits.shape[-1] > 0:
+             with torch.no_grad():
