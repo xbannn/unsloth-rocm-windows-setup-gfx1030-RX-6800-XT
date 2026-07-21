@@ -1151,6 +1151,7 @@ Index: https://rocm.nightlies.amd.com/v2-staging/gfx103X-dgpu/
 2. **Compiled module forward:** Patch `Qwen3_5GatedDeltaNet_forward` in the compiled module to cast `hidden_states` dtype to match `self.in_proj_qkv.weight.dtype` before the forward call. Applied via `sitecustomize.py` import hook.
 3. **RMSNormGated output:** Force `Qwen3_5RMSNormGated_forward` output to `torch.float16` regardless of input dtype (vLLM fix). Applied via `sitecustomize.py` import hook.
 **Files modified:** `trainer.py` (after model loading), `sitecustomize.py` (import hook for compiled module)
+**Cache management:** After any dtype fix, delete `unsloth_compiled_cache/unsloth_compiled_module_qwen3_5.py` AND its `__pycache__/*.pyc` to force recompilation with correct dtypes. The `.pyc` file persists the old dtype-conditional code even after the `.py` source is patched.
 
 ### Error: "Logits are empty from 2024.11 onwards" / `NotImplementedError` during training
 **Cause:** The compiled module (`unsloth_compiled_module_qwen3_5.py`) checks `os.environ.get('UNSLOTH_RETURN_LOGITS', '0') == '1'` at line 1160 of the generated forward function. Even though the env var is set at `trainer.py:18` (before any unsloth imports), the compiled module's code generation captures the env var state at **generation time** in a previous run. On subsequent training steps, the env var check can return `EmptyLogits` sporadically.
