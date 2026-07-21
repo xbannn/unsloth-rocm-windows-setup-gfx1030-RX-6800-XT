@@ -1176,6 +1176,24 @@ Index: https://rocm.nightlies.amd.com/v2-staging/gfx103X-dgpu/
 
 **Cache Gotcha:** The compiled module (`unsloth_compiled_cache/unsloth_compiled_module_qwen3_5.py`) and its `.pyc` bytecode cache persist between runs. After ANY code or env var change affecting the compiled forward, BOTH must be deleted to force recompilation. The `.pyc` can retain old dtype-conditional code even after the `.py` source is patched.
 
+### Best training settings for Qwen3.5 Agents-A1-4B on ROCm (RX 6800 XT, 16GB)
+
+| Parameter | Value | Reason |
+|-----------|-------|--------|
+| Method | LoRA (16-bit) | Full FT OOM at float32; LoRA trains 0.47% of params |
+| Batch Size | 1 | 2 OOMs with optimizer states |
+| Grad Accum | 8 | Effective batch = 8 |
+| Context Length | 1024 | 2048+ causes OOM; patches can be truncated |
+| Learning Rate | 2e-4 | Standard for LoRA |
+| Optimizer | AdamW (PyTorch) | bitsandbytes 8-bit not available on ROCm Windows |
+| Epochs | 3 | ~258 steps for 685 samples, ~70 min |
+| Target Modules | q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj | Standard attention + MLP layers |
+| fp16 | False | Crashes GradScaler on ROCm |
+| bf16 | False | Crashes Triton BF16 kernels on RDNA2 |
+| load_in_4bit | False | bitsandbytes has no ROCm Windows DLL |
+| Dataset format | ChatML (messages column) | Auto-detected by Unsloth Studio |
+| Dataset structure | `[{"role":"user","content":"..."},{"role":"assistant","content":"<think>...</think>\n\n{patch}"}]` | Must include `<think>` reasoning + git diff |
+
 ### Error: "Logits are empty from 2024.11 onwards" / `NotImplementedError` during training
 **Cause:** The compiled module (`unsloth_compiled_module_qwen3_5.py`) checks `os.environ.get('UNSLOTH_RETURN_LOGITS', '0') == '1'` at line 1160 of the generated forward function. Even though the env var is set at `trainer.py:18` (before any unsloth imports), the compiled module's code generation captures the env var state at **generation time** in a previous run. On subsequent training steps, the env var check can return `EmptyLogits` sporadically.
 **Fix:** Patch the compiled module's `Qwen3_5ForConditionalGeneration_forward` in-memory after model loading to set `os.environ["UNSLOTH_RETURN_LOGITS"] = "1"` before every forward call. Applied in `trainer.py` after `FastLanguageModel.from_pretrained()`.
