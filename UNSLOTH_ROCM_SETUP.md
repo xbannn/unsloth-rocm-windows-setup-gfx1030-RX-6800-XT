@@ -1083,6 +1083,26 @@ Index: https://rocm.nightlies.amd.com/v2-staging/gfx103X-dgpu/
 **Cause:** Model wasn't trained to output git diff format. The training data format needs to teach `problem → diff` mapping.
 **Fix:** Ensure dataset format has clear instruction: `"Fix this bug: {problem}"` and expected output: `"diff --git ..."`.
 
+### Error: "transformers version does not support Qwen3.5"
+**Cause:** Qwen3_5ForConditionalGeneration requires transformers ≥5.2.0. Unsloth Studio ships with 4.57.6.
+**Fix:** `pip install "transformers>=5.2.0"` (tested with 5.2.0, works with 5.14.1).
+
+### Error: "cannot import name 'DeviceMesh' from 'torch.distributed'"
+**Cause:** torch.compile (inductor) tries to import distributed modules not present in ROCm Windows PyTorch build.
+**Fix:** Set `UNSLOTH_DISABLE_COMPILE=1` and `TORCH_COMPILE_DISABLE=1` before model loads (add to sitecustomize.py).
+
+### Error: "Qwen3VLProcessor has no attribute 'encode'"
+**Cause:** Qwen3.5 is a VLM (Vision-Language Model). The tokenizer from `FastLanguageModel` is a `Qwen3VLProcessor` (multimodal processor), not a raw text tokenizer.
+**Fix:** Use `tokenizer.tokenizer.encode(text)` to bypass the multimodal processor, or `tokenizer(text, text_only=True)` if supported. Avoid calling `tokenizer(text, ...)` directly — it triggers image parsing even with `images=None`.
+
+### Error: "MIOpen: CK grouped conv library not found for device gfx1030"
+**Cause:** Qwen3.5 includes a vision encoder (ViT with conv layers). MIOpen tries to compile grouped convolution kernels on first forward pass, which can be slow or hang on RDNA2 Windows.
+**Fix:** Not blocking — just a performance warning. Set `MIOPEN_ENABLE_LOGGING_CMD=0` to suppress noise. First generation takes ~50s (prefill + MIOpen compilation), subsequent tokens ~2.5 t/s.
+
+### Warning: "Using float16 precision for qwen3_5 won't work! Using float32."
+**Cause:** Unsloth's auto-dtype detection picks float32 for Qwen3.5 even when `dtype=torch.float16` is requested. This doubles VRAM requirements (9 GB for the 4B model).
+**Fix:** Accept float32. The model still fits in 16GB VRAM (9.08 GB allocated). Training with LoRA reduces memory further.
+
 ---
 
-*End of guide. Generated 2026-07-20. Tested on AMD Radeon RX 6800 XT (gfx1030), 16GB VRAM, Windows 11.*
+*End of guide. Generated 2026-07-21. Tested on AMD Radeon RX 6800 XT (gfx1030), 16GB VRAM, Windows 11. Qwen3.5 support added.*
