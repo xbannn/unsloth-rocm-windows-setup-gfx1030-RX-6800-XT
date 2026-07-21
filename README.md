@@ -1079,9 +1079,8 @@ Index: https://rocm.nightlies.amd.com/v2-staging/gfx103X-dgpu/
 **Cause:** ZLUDA doesn't implement `cudaMemGetInfo`.
 **Fix:** Apply Patch 9 (try/except on mem_get_info).
 
-### Benchmark shows 0% patches
-**Cause:** Model wasn't trained to output git diff format. The training data format needs to teach `problem → diff` mapping.
-**Fix:** Ensure dataset format has clear instruction: `"Fix this bug: {problem}"` and expected output: `"diff --git ..."`.
+### Model doesn't output correct format after training
+**Fix:** Ensure the training dataset has clear instruction/response pairs. For code tasks: `"Fix this bug: {problem}"` paired with `"diff --git ..."`. Use "Raw Text" format in the Studio UI and map columns accordingly.
 
 ---
 
